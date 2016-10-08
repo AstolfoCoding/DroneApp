@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">DroneApp</string>
+    <string name="forward">FORWARD</string>
+    <string name="back">BACK</string>
+    <string name="right">RIGHT</string>
+    <string name="left">LEFT</string>
+    <string name="cw">CW</string>
+    <string name="down">DOWN</string>
+    <string name="acw">ACW</string>
+    <string name="up">UP</string>
+    <string name="on">ON</string>
+    <string name="land">LAND</string>
+    <string name="off">OFF</string>
+</resources>

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="build-extras" default="debug" xmlns:artifact="antlib:org.apache.maven.artifact.ant">
+
+    <property name="app.lib.absolute.dir" location="app-libs" />
+    <property name="app.lib.absolute.retrolambda.dir" location="app-libs/classes" />
+    <property name="retrolambda.version" value="1.6.0" />
+
+    <target name="-pre-build" depends="-jfx.bootstrap"/>
+
+    <target name="-jfx.uptodate">
+        <uptodate property="jfx.uptodate">
+            <srcfiles dir="${jfx.sdk.absolute.dir}/rt/lib/ext" />
+            <mapper type="glob" from="*.jar" to="${jar.libs.absolute.dir}/*.jar"/>
+        </uptodate>
+    </target>
+
+    <target name="-jfx.bootstrap" unless="jfx.uptodate" depends="-jfx.uptodate">
+        <copy todir="${jar.libs.absolute.dir}">
+            <fileset dir="${jfx.sdk.absolute.dir}/rt/lib" excludes="ext/ *.properties"/>
+            <fileset dir="${jfx.sdk.absolute.dir}/rt/lib/ext" includes="jfxdvk.jar"/>
+        </copy>
+        <copy todir="${asset.absolute.dir}">
+            <fileset dir="${jfx.sdk.absolute.dir}/rt/lib">
+                <include name="*.properties"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="-pre-dex" depends="-pre-package-split-resources, -retrolambda">
+    </target>
+
+	<target name="-pre-package-application.uptodate">
+        <uptodate property="pre-package-application.uptodate" targetfile="${app.lib.absolute.dir}/Application.jar">
+            <srcresources>
+                <fileset dir="${out.classes.absolute.dir}" />
+                <fileset dir="${jfx.sdk.absolute.dir}/rt/lib/ext" includes="*.jar" excludes="jfxdvk.jar"/>
+                <fileset dir="${jfx.app.absolute.dist.dir}" includes="**/*.jar"/>
+            </srcresources>
+        </uptodate>
+    </target>
+
+    <target name="-pre-package-application" unless="pre-package-application.uptodate" depends="-pre-package-application.uptodate">
+        <mkdir dir="${app.lib.absolute.dir}"/> 
+        <jar destfile="${app.lib.absolute.dir}/Application.jar">
+            <fileset dir="${out.classes.absolute.dir}" />
+            <zipgroupfileset dir="${jfx.sdk.absolute.dir}/rt/lib/ext" includes="*.jar" excludes="jfxdvk.jar"/>
+            <zipgroupfileset dir="${jfx.app.absolute.dist.dir}" includes="**/*.jar"/>
+        </jar>
+    </target>
+
+   <target name="-pre-package-split-resources.uptodate" depends="-pre-package-application">
+        <uptodate property="pre-package-split-resources.uptodate" targetfile="${asset.absolute.dir}/Application_resources.jar">
+            <srcfiles file="${app.lib.absolute.dir}/Application.jar" />
+        </uptodate>
+    </target>
+
+    <target name="-pre-package-split-resources" unless="-pre-package-split-resources.uptodate" depends="-pre-package-split-resources.uptodate">
+        <jar destfile="${app.lib.absolute.dir}/Application_resources.jar">
+            <zipfileset src="${app.lib.absolute.dir}/Application.jar" excludes="**/*.class"/>
+        </jar>
+        <copy file="${app.lib.absolute.dir}/Application_resources.jar" todir="${asset.absolute.dir}" />
+    </target>
+
+   <target name="-pre-package-split-classes.uptodate" depends="-pre-package-application">
+        <uptodate property="pre-package-split-classes.uptodate" targetfile="${app.lib.absolute.dir}/Application_classes.jar">
+            <srcfiles file="${app.lib.absolute.dir}/Application.jar" />
+        </uptodate>
+    </target>
+
+    <target name="-pre-package-split-classes" unless="pre-package-split-classes.uptodate" depends="-pre-package-split-classes.uptodate">
+        <jar destfile="${app.lib.absolute.dir}/Application_classes.jar">
+            <zipfileset src="${app.lib.absolute.dir}/Application.jar" includes="**/*.class"/>
+        </jar>
+    </target>
+
+    <target name="-retrolambda.uptodate" depends="-pre-package-split-classes">
+        <uptodate property="retrolambda.uptodate" targetfile="${app.lib.absolute.dir}/Application_retrolambda_classes.jar">
+            <srcfiles file="${app.lib.absolute.dir}/Application_classes.jar" />
+        </uptodate>
+    </target>
+
+    <target name="-retrolambda" unless="retrolambda.uptodate" depends="-retrolambda.uptodate">
+
+        <delete dir="${app.lib.absolute.retrolambda.dir}" failonerror="no"/>
+
+        <unzip src="${app.lib.absolute.dir}/Application_classes.jar" dest="${app.lib.absolute.retrolambda.dir}"/>
+
+        <path id="maven-ant-tasks.classpath" path="${jfx.sdk.absolute.dir}/android-tools/lib/maven-ant-tasks-2.1.3.jar" />
+        <typedef resource="org/apache/maven/artifact/ant/antlib.xml"
+               uri="antlib:org.apache.maven.artifact.ant"
+               classpathref="maven-ant-tasks.classpath" />
+
+        <artifact:dependencies pathId="retrolambda.jarfile.antpath">
+            <dependency groupId="net.orfjackal.retrolambda" artifactId="retrolambda" version="${retrolambda.version}" />
+        </artifact:dependencies>
+
+        <path id="basecp.antpath">
+            <pathelement path="${java.class.path}/"/>
+            <pathelement path="${app.lib.absolute.retrolambda.dir}"/>
+        </path>
+
+        <property name="basecp" refid="basecp.antpath"/>
+        <property name="retrolambda.jarfile" refid="retrolambda.jarfile.antpath"/>
+
+        <java classname="net.orfjackal.retrolambda.Main" failonerror="true" fork="true">
+            <sysproperty key="retrolambda.inputDir" value="${app.lib.absolute.retrolambda.dir}" />
+            <sysproperty key="retrolambda.classpath" path="${basecp}" />
+            <sysproperty key="retrolambda.bytecodeVersion" value="51" />
+            <jvmarg value="-javaagent:${retrolambda.jarfile}" />
+            <classpath>
+                <path refid="retrolambda.jarfile.antpath"/>
+            </classpath>
+            <bootclasspath>
+                <pathelement path="${java.home}/jre/lib/rt.jar"/>
+            </bootclasspath>
+        </java>
+
+        <jar destfile="${app.lib.absolute.dir}/Application_retrolambda_classes.jar" basedir="${app.lib.absolute.retrolambda.dir}"/>
+    </target>
+
+    <target name="-pre-clean">
+        <delete includeemptydirs="true" quiet="true">
+            <fileset dir="${app.lib.absolute.dir}" />
+            <fileset dir="${asset.absolute.dir}" />
+        </delete>
+    </target>
+
+    <macrodef name="dex-helper-extra">
+        <element name="external-libs" optional="yes" />
+        <element name="extra-parameters" optional="yes" />
+        <attribute name="nolocals" default="false" />
+        <sequential>
+            <property name="out.dex.input.absolute.dir" value="${out.classes.absolute.dir}" />
+            <condition property="nolocals.option" value="--no-locals" else="" >
+                    <istrue value="@{nolocals}" />
+            </condition>
+            <condition property="verbose.option" value="--verbose" else="" >
+                    <istrue value="${verbose}" />
+            </condition>
+            <if>
+                <condition>
+                        <isreference refid="out.dex.jar.input.ref" />
+                </condition>
+                <else>
+                    <path id="out.dex.jar.input.ref">
+                        <path refid="project.all.jars.path" />
+                    </path>
+                </else>
+            </if>
+            <pathconvert refid="out.dex.jar.input.ref" property="out.dex.jar.input.value" pathsep=" "/>
+            <exec executable="${dx}" failonerror="true">
+                    <arg value="--dex" />
+                    <arg value="--output=${intermediate.dex.file}" />
+                    <extra-parameters />
+                    <arg line="${verbose.option}" />
+                    <arg line="${nolocals.option}" />
+                    <arg line="${jar.libs.absolute.dir}/jfxdvk.jar"/>
+                    <external-libs />
+            </exec>
+            <property name="output-dex-dir" value="${out.absolute.dir}/app_dex" />
+            <mkdir dir="${out.absolute.dir}/app_dex"/>
+            <exec executable="${dx}" failonerror="true">
+                    <arg value="-JXmx2g" />
+                    <arg value="--dex" />
+                    <arg value="--multi-dex" />
+                    <arg value="--output=${output-dex-dir}" />
+                    <extra-parameters />
+                    <arg line="${verbose.option}" />
+                    <arg line="${nolocals.option}" />
+                    <arg line="${app.lib.absolute.dir}/Application_retrolambda_classes.jar"/>
+            </exec>
+            <zip destfile="${asset.absolute.dir}/Application_dex.jar" basedir="${output-dex-dir}" /> 
+            <tstamp>
+                <format property="build.time" pattern="yyyyMMddHHmmssZ" />
+            </tstamp>
+            <echo file="${asset.absolute.dir}/buildtime" message="${build.time}"/>
+        </sequential>
+    </macrodef>
+
+    <target name="-dex" depends="-compile, -post-compile, -obfuscate, -pre-dex">
+        <do-only-if-manifest-hasCode elseText="hasCode = false. Skipping...">
+        <do-only-if-not-library elseText="Library project: do not convert bytecode..." >
+        <if condition="${build.is.instrumented}">
+            <then>
+                <dex-helper-extra nolocals="true">
+                <external-libs>
+                    <fileset file="${emma.dir}/emma_device.jar" />
+                </external-libs>
+                </dex-helper-extra>
+            </then>
+            <else>
+                <dex-helper-extra>
+                    <extra-parameters>
+                        <arg value="--core-library" />
+                    </extra-parameters>
+                </dex-helper-extra>
+            </else>
+        </if>
+        </do-only-if-not-library>
+        </do-only-if-manifest-hasCode>
+    </target>
+
+    <macrodef name="package-helper-extra">
+        <element name="extra-jars" optional="yes" />
+        <sequential>
+            <apkbuilder
+                    outfolder="${out.absolute.dir}"
+                    resourcefile="${resource.package.file.name}"
+                    apkfilepath="${out.packaged.file}"
+                    debugpackaging="${build.is.packaging.debug}"
+                    debugsigning="${build.is.signing.debug}"
+                    verbose="${verbose}"
+                    hascode="${manifest.hasCode}"
+                    previousBuildType="${build.last.is.packaging.debug}/${build.last.is.signing.debug}"
+                    buildType="${build.is.packaging.debug}/${build.is.signing.debug}">
+                <dex path="${intermediate.dex.file}"/>
+                <sourcefolder path="${source.absolute.dir}"/>
+                <nativefolder path="${native.libs.absolute.dir}" />
+                <nativefolder refid="project.library.native.folder.path" />
+                <nativefolder refid="project.rs.support.libs.path" />
+                <nativefolder path="${out.rs.libs.absolute.dir}" />
+                <extra-jars/>
+            </apkbuilder>
+        </sequential>
+    </macrodef>
+    
+    <target name="-package" depends="-dex, -package-resources">
+        <!-- only package apk if *not* a library project -->
+        <do-only-if-not-library elseText="Library project: do not package apk..." >
+            <if condition="${build.is.instrumented}">
+                <then>
+                    <package-helper-extra>
+                        <extra-jars>
+                            <!-- Injected from external file -->
+                            <jarfile path="${emma.dir}/emma_device.jar" />
+                        </extra-jars>
+                    </package-helper-extra>
+                </then>
+                <else>
+                    <package-helper-extra />
+                </else>
+            </if>
+        </do-only-if-not-library>
+    </target>
+</project>
